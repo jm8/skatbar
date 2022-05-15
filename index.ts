@@ -1,3 +1,5 @@
+import readline from "readline";
+
 export const SUITS = ['C', 'S', 'H', 'D'] as const;
 export type Suit = typeof SUITS[number];
 export const VALUES = ['2', '3', '4', '5', '6'] as const;
@@ -131,14 +133,21 @@ export function deal(numPlayers: number, numCards: number): StateWithoutTrump {
   };
 }
 
-async function randomAi(visibleState: VisibleState, possibleMoves: Set<Card>): Promise<Card> {
+async function randomAi(_visibleState: VisibleState, possibleMoves: Set<Card>): Promise<Card> {
   return [...possibleMoves][Math.floor(Math.random()*possibleMoves.size)];
 }
 
-async function getPlayerMove(visibleState: VisibleState, possibleMoves: Set<Card>): Promise<Card> {
-  console.log(visibleState.played);
-  console.log(visibleState.hand);
-  return prompt("your move: ") as Card;
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
+function getPlayerMove(visibleState: VisibleState, possibleMoves: Set<Card>): Promise<Card> {
+  return new Promise(resolve => {
+    console.log(visibleState.played);
+    console.log(visibleState.hand);
+    rl.question("your move:", x => resolve(x as Card));
+  })
 }
 
 async function doMove(state: EntireState, f: (visibleState: VisibleState, possibleMoves: Set<Card>) => Promise<Card>): Promise<EntireState> {
@@ -150,6 +159,7 @@ async function doMove(state: EntireState, f: (visibleState: VisibleState, possib
   // HACK: this is mutating state. hopefully this doesn't cause problems
   state.hands[state.player].delete(move)
   state.played.push(move);
+  state.player++;
   
   if (state.played.length === state.hands.length) {
     state = takeTrick(state);
@@ -163,8 +173,15 @@ function getOrderingValue(card: Card, leadingSuit: EffectiveSuit, trump: Trump) 
   if (effectiveSuit !== leadingSuit && effectiveSuit !== 'T') return 0;
   if (card === 'G') return 201;
   if (card === 'J') return 200;
+  
+  const suitScore: {[s in Suit]: number} = {
+    C: 4,
+    S: 3,
+    H: 2,
+    D: 1,
+  }
 
-  const value = Number(card[0] as Value);
+  const value = 10*Number(card[0] as Value) + suitScore[card[1] as Suit];
   if (effectiveSuit === 'T') return value + 100;
   return value;
 }
@@ -193,7 +210,8 @@ function takeTrick(state: EntireState): EntireState {
     state.won[maxCardPlayer].add(card);
   }
   state.played = [];
-  state.leader = state.player = state.leader;
+  state.leader = maxCardPlayer;
+  state.player = state.leader;
   return state;
 }
 
@@ -203,8 +221,7 @@ export async function main() {
   let currState = stateWithTrump;
   for (let i = 0; i < 10; i++) {
     console.log(currState);
-    // const f = currState.player === 0 ? getPlayerMove : randomAi;
-    const f = randomAi;
+    const f = currState.player === 0 ? getPlayerMove : randomAi;
     currState = await doMove(currState, f);
   }
 }
