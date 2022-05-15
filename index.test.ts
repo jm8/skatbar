@@ -12,6 +12,7 @@ test('forced to follow suit', () => {
     leader: 0,
     won: [],
     played: ['5H'],
+    player: 1,
     hand: new Set<Card>([
       '4H',
       '3H',
@@ -22,7 +23,8 @@ test('forced to follow suit', () => {
       '2C',
       '4S',
     ]),
-  }, { color: 'red', parity: 'even' })).toEqual(new Set<Card>([
+    trump: { color: 'red', parity: 'even' },
+  })).toEqual(new Set<Card>([
     '3H',
   ]))
 })
@@ -32,6 +34,7 @@ test('forced to play trump', () => {
     leader: 0,
     won: [],
     played: ['2H'],
+    player: 1,
     hand: new Set<Card>([
       '4H',
       '3H',
@@ -42,7 +45,8 @@ test('forced to play trump', () => {
       '2C',
       '4S',
     ]),
-  }, { color: 'red', parity: 'even' })).toEqual(new Set<Card>([
+    trump: { color: 'red', parity: 'even' },
+  })).toEqual(new Set<Card>([
     '4H',
     '2D',
     'G',
@@ -54,6 +58,7 @@ test('play whatever', () => {
     leader: 0,
     won: [],
     played: ['3S'],
+    player: 1,
     hand: new Set<Card>([
       '4H',
       '3H',
@@ -62,7 +67,8 @@ test('play whatever', () => {
       '5C',
       '2C',
     ]),
-  }, { color: 'red', parity: 'even' })).toEqual(new Set<Card>([
+    trump: { color: 'red', parity: 'even' },
+  })).toEqual(new Set<Card>([
     '4H',
     '3H',
     '2D',
