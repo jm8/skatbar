@@ -142,11 +142,10 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
-function getPlayerMove(visibleState: VisibleState, possibleMoves: Set<Card>): Promise<Card> {
+function getPlayerMove(_visibleState: VisibleState, possibleMoves: Set<Card>): Promise<Card> {
   return new Promise(resolve => {
-    console.log(visibleState.played);
-    console.log(visibleState.hand);
-    rl.question("your move:", x => resolve(x as Card));
+    console.log("possible moves: " + cardsToString(possibleMoves));
+    rl.question("your move: ", x => resolve(x as Card));
   })
 }
 
@@ -155,14 +154,18 @@ async function doMove(state: EntireState, f: (visibleState: VisibleState, possib
   const possibleMoves = getPossibleMoves(visibleState);
   const move = await f(visibleState, possibleMoves);
   if (!possibleMoves.has(move)) return state;
-  
+
   // HACK: this is mutating state. hopefully this doesn't cause problems
   state.hands[state.player].delete(move)
   state.played.push(move);
   state.player++;
+  state.player %= state.hands.length;
+
+  sendState(visibleState)
   
   if (state.played.length === state.hands.length) {
     state = takeTrick(state);
+    sendState(visibleState)
   }
 
   return state;
@@ -215,12 +218,30 @@ function takeTrick(state: EntireState): EntireState {
   return state;
 }
 
+function cardsToString(cards: Iterable<Card>) {
+  let res = "";
+  let sep = "";
+  for (const card of cards) {
+    res += sep + card;
+    sep = " ";
+  }
+  return res;
+}
+
+function sendState(state: VisibleState) {
+  console.log();
+  console.log("played: " + cardsToString(state.played));
+  if (state.player === 0) {
+    console.log("hand: " + cardsToString(state.hand));
+  }
+}
+
 export async function main() {
   const state = deal(3, 5);
   const stateWithTrump: EntireState = {...state, trump: {color: 'red', parity: 'even'}}
   let currState = stateWithTrump;
+  sendState(reduceToVisible(currState));
   for (let i = 0; i < 10; i++) {
-    console.log(currState);
     const f = currState.player === 0 ? getPlayerMove : randomAi;
     currState = await doMove(currState, f);
   }
