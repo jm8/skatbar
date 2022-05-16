@@ -1,4 +1,5 @@
-import { getEffectiveSuit, getPossibleMoves, Card } from './index'
+import { getEffectiveSuit, getPossibleMoves } from './index'
+import { Card } from '../commonTypes'
 
 test('effective suit', () => {
   expect(getEffectiveSuit('3H', { color: 'red', parity: 'even' })).toBe('H')

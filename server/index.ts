@@ -1,16 +1,6 @@
 import { Server } from "socket.io";
 
-export const SUITS = ['C', 'S', 'H', 'D'] as const;
-export type Suit = typeof SUITS[number];
-export const VALUES = ['2', '3', '4', '5', '6'] as const;
-export type Value = typeof VALUES[number];
-export type Card = `${Value}${Suit}` | 'J' | 'G';
-
-export type Parity = 'even' | 'odd';
-export type Color = 'red' | 'black';
-export type Trump = { parity: Parity, color: Color };
-
-export type EffectiveSuit = Suit | 'T';
+import {SUITS, Card, Trump, Value, EffectiveSuit, VALUES, Suit, VisibleState, ClientToServerEvents, ServerToClientEvents} from "../commonTypes";
 
 export const DECK = [...SUITS.flatMap(suit => VALUES.map(value => `${value}${suit}`)), 'J', 'G'] as readonly Card[];
 
@@ -56,16 +46,6 @@ export function pointValue(card: Card) {
   return Number(card[0]);
 }
 
-// what is given to someone when
-// they decide how to move
-export type VisibleState = {
-  leader: number,
-  played: Card[],
-  player: number,
-  hand: Set<Card>,
-  won: Set<Card>[],
-  trump: Trump,
-};
 
 type StateWithoutTrump = {
   leader: number,
@@ -233,15 +213,6 @@ class Game {
     return state;
   }
 
-}
-
-interface ClientToServerEvents {
-  newGame: (numPlayers: number) => void
-  run: () => void
-}
-
-interface ServerToClientEvents {
-  emitVisibleState: (visibleState: VisibleState) => void
 }
 
 interface InterServerEvents {
