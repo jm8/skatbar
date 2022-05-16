@@ -1,4 +1,4 @@
-import readline from "readline";
+import { Server } from "socket.io";
 
 export const SUITS = ['C', 'S', 'H', 'D'] as const;
 export type Suit = typeof SUITS[number];
@@ -92,16 +92,16 @@ export function reduceToVisible(state: EntireState): VisibleState {
 
 export function getPossibleMoves(state: VisibleState): Set<Card> {
   if (state.played.length === 0) return state.hand;
-  
+
   const effectiveSuit = getEffectiveSuit(state.played[0], state.trump);
 
   const followSuit = new Set<Card>();
   state.hand.forEach(card => {
     if (getEffectiveSuit(card, state.trump) === effectiveSuit) followSuit.add(card);
   });
-  
+
   if (followSuit.size === 0) return state.hand;
-  
+
   return followSuit;
 }
 
@@ -115,15 +115,15 @@ function arrayOfSets<T>(n: number): Set<T>[] {
 
 export function deal(numPlayers: number, numCards: number): StateWithoutTrump {
   const deck = shuffleDeck();
-  
+
   let hands = arrayOfSets<Card>(numPlayers);
-  
+
   for (let i = 0; i < numCards; i++) {
     for (let j = 0; j < numPlayers; j++) {
       hands[j].add(deck.pop()!);
     }
   }
-  
+
   return {
     leader: 0,
     played: [],
@@ -133,42 +133,15 @@ export function deal(numPlayers: number, numCards: number): StateWithoutTrump {
   };
 }
 
-async function randomAi(_visibleState: VisibleState, possibleMoves: Set<Card>): Promise<Card> {
-  return [...possibleMoves][Math.floor(Math.random()*possibleMoves.size)];
-}
-
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
-
-function getPlayerMove(_visibleState: VisibleState, possibleMoves: Set<Card>): Promise<Card> {
+function sleep(ms: number): Promise<void> {
   return new Promise(resolve => {
-    console.log("possible moves: " + cardsToString(possibleMoves));
-    rl.question("your move: ", x => resolve(x as Card));
-  })
+    setTimeout(resolve, ms);
+  });
 }
 
-async function doMove(state: EntireState, f: (visibleState: VisibleState, possibleMoves: Set<Card>) => Promise<Card>): Promise<EntireState> {
-  const visibleState = reduceToVisible(state);
-  const possibleMoves = getPossibleMoves(visibleState);
-  const move = await f(visibleState, possibleMoves);
-  if (!possibleMoves.has(move)) return state;
-
-  // HACK: this is mutating state. hopefully this doesn't cause problems
-  state.hands[state.player].delete(move)
-  state.played.push(move);
-  state.player++;
-  state.player %= state.hands.length;
-
-  sendState(visibleState)
-  
-  if (state.played.length === state.hands.length) {
-    state = takeTrick(state);
-    sendState(visibleState)
-  }
-
-  return state;
+async function randomAi(_visibleState: VisibleState, possibleMoves: Set<Card>): Promise<Card> {
+  await sleep(500);
+  return [...possibleMoves][Math.floor(Math.random() * possibleMoves.size)];
 }
 
 function getOrderingValue(card: Card, leadingSuit: EffectiveSuit, trump: Trump) {
@@ -176,15 +149,15 @@ function getOrderingValue(card: Card, leadingSuit: EffectiveSuit, trump: Trump) 
   if (effectiveSuit !== leadingSuit && effectiveSuit !== 'T') return 0;
   if (card === 'G') return 201;
   if (card === 'J') return 200;
-  
-  const suitScore: {[s in Suit]: number} = {
+
+  const suitScore: { [s in Suit]: number } = {
     C: 4,
     S: 3,
     H: 2,
     D: 1,
   }
 
-  const value = 10*Number(card[0] as Value) + suitScore[card[1] as Suit];
+  const value = 10 * Number(card[0] as Value) + suitScore[card[1] as Suit];
   if (effectiveSuit === 'T') return value + 100;
   return value;
 }
@@ -218,33 +191,87 @@ function takeTrick(state: EntireState): EntireState {
   return state;
 }
 
-function cardsToString(cards: Iterable<Card>) {
-  let res = "";
-  let sep = "";
-  for (const card of cards) {
-    res += sep + card;
-    sep = " ";
+class Game {
+  state: EntireState
+  emitSendVisibleState: (socketId: string, visibleState: VisibleState) => void
+  playerSocketIds: (string | null)[]
+
+  sendVisibleState(visibleState: VisibleState) {
+    const socketId = this.playerSocketIds[visibleState.player];
+    if (socketId) {
+      this.emitSendVisibleState(socketId, visibleState);
+    }
   }
-  return res;
+
+  constructor(numPlayers: number, emitSendVisibleState: (socketId: string, visibleState: VisibleState) => void) {
+    this.state = { ...deal(numPlayers, 5), trump: { parity: 'even', color: 'red' } };
+    this.emitSendVisibleState = emitSendVisibleState;
+    this.playerSocketIds = new Array(numPlayers).fill(null);
+  }
+  
+  run() {
+    
+  }
+
+
+  async doMove(state: EntireState, f: (visibleState: VisibleState, possibleMoves: Set<Card>) => Promise<Card>): Promise<EntireState> {
+    const visibleState = reduceToVisible(state);
+    const possibleMoves = getPossibleMoves(visibleState);
+    const move = await f(visibleState, possibleMoves);
+    if (!possibleMoves.has(move)) return state;
+
+    // HACK: this is mutating state. hopefully this doesn't cause problems
+    state.hands[state.player].delete(move)
+    state.played.push(move);
+    state.player++;
+    state.player %= state.hands.length;
+
+    if (state.played.length === state.hands.length) {
+      state = takeTrick(state);
+    }
+
+    return state;
+  }
+
 }
 
-function sendState(state: VisibleState) {
-  console.log();
-  console.log("played: " + cardsToString(state.played));
-  if (state.player === 0) {
-    console.log("hand: " + cardsToString(state.hand));
-  }
+interface ClientToServerEvents {
+  newGame: (numPlayers: number) => void
+  run: () => void
 }
 
-export async function main() {
-  const state = deal(3, 5);
-  const stateWithTrump: EntireState = {...state, trump: {color: 'red', parity: 'even'}}
-  let currState = stateWithTrump;
-  sendState(reduceToVisible(currState));
-  for (let i = 0; i < 10; i++) {
-    const f = currState.player === 0 ? getPlayerMove : randomAi;
-    currState = await doMove(currState, f);
-  }
+interface ServerToClientEvents {
+  emitVisibleState: (visibleState: VisibleState) => void
+}
+
+interface InterServerEvents {
+
+}
+
+interface SocketData {
+  gameId: number,
+}
+
+function main() {
+  let gameId = 0;
+  const games = new Map<number, Game>();
+  const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(4000);
+  io.on("connection", (socket) => {
+    socket.on("newGame", (numPlayers) => {
+      socket.data.gameId = gameId;
+      games.set(gameId, new Game(numPlayers, (socketId, visibleState) => {
+        socket.to(socketId).emit("emitVisibleState", visibleState);
+      }));
+      gameId++;
+    })
+    socket.on("run", () => {
+      const gameId = socket.data.gameId;
+      if (gameId !== undefined) {
+        const game = games.get(gameId)
+        if (game) game.run();
+      }
+    })
+  })
 }
 
 main();
